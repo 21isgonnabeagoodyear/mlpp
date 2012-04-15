@@ -57,18 +57,15 @@ static void untarget()
 static void drawlayer(int ind)
 {
 	glBindTexture(GL_TEXTURE_2D, layers[ind].texid);
-	glPushMatrix();
-	glRotatef(45,0,0,1);
 	glBegin(GL_QUADS);
 	glColor4f(1,1,1,layers[ind].opacity);
 //	printf("op %d %f\n", ind, layers[ind].opacity);
 	float xt, yt;
-	glTexCoord2f(0,0);glVertex3f(-1*windowa*zoom+panx,-1*zoom+pany,0);
+	glTexCoord2f(0,0);glVertex3f((-1*windowa*zoom+panx)*sin(rotation),-1*zoom+pany,0);
 	glTexCoord2f(0,1);glVertex3f(-1*windowa*zoom+panx,1*zoom+pany,0);
 	glTexCoord2f(1,1);glVertex3f(1*windowa*zoom+panx,1*zoom+pany,0);
 	glTexCoord2f(1,0);glVertex3f(1*windowa*zoom+panx,-1*zoom+pany,0);
 	glEnd();
-	glPopMatrix();
 }
 static void drawwheel()
 {
