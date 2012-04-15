@@ -4,6 +4,7 @@
 #include <gtk/gtk.h>
 #include <gtk/gtkgl.h>
 #include <GL/gl.h>
+#include <gdk/gdkkeysyms.h>
 
 #include <math.h>
 #include <stdlib.h>
@@ -144,7 +145,7 @@ static gboolean cbscroll(GtkWidget *widget, GdkEventScroll *event, gpointer notu
 	else if(event->direction == GDK_SCROLL_DOWN)
 		zoom *= 0.9;
 	zoom = zoom>1000?1000:zoom;
-	zoom = zoom<1?1:zoom;
+	zoom = zoom<0.1?0.1:zoom;
 	c_zoom(zoom);
 	gdk_window_invalidate_rect (event->window, NULL, TRUE);
 	return FALSE;
@@ -181,9 +182,9 @@ printf("clicked %d\n", event->button);
 			c_droppersample(rx/gdk_window_get_width(widget->window), ry/gdk_window_get_height(widget->window));
 		}
 	}
-	else if(event->button == 4)
-		zoom /= 0.9;
 	else if(event->button == 5)
+		zoom /= 0.9;
+	else if(event->button == 4)
 		zoom *= 0.9;
 	else if(event->button == 2)
 	{
@@ -202,12 +203,41 @@ printf("clicked %d\n", event->button);
 		}
 	}
 	zoom = zoom>1000?1000:zoom;
-	zoom = zoom<1?1:zoom;
+	zoom = zoom<0.10?0.10:zoom;
 	c_zoom(zoom);
 
 
 	gdk_window_invalidate_rect (event->window, NULL, TRUE);
 	return FALSE;
+}
+gboolean cbkeypress(GtkWidget *widget, GdkEventKey *event, gpointer notused)
+{
+	printf("key %d\n", event->keyval);
+	//if(event->keyval == GDK_bracketleft)
+	static float alpha = 0.5;
+	if(event->keyval == 65361)
+		c_rotate(PI/32);
+	else if(event->keyval == 65363)
+		c_rotate(-PI/32);
+	else if(event->keyval >=49 && event->keyval <=57 )//keys 1,2,3,4
+		b_switch(event->keyval - 49);
+	else if(event->keyval >=65470 && event->keyval <=65474 )//f1-f4
+		c_selectlayer(event->keyval - 65470);
+	else if(event->keyval ==65535)//del
+		b_mode(1);
+	else if(event->keyval ==65293)//enter
+		b_mode(0);
+	else if(event->keyval == 65362)//up
+		b_alpha(alpha =(alpha*1.5)>5?5:(alpha*1.5));
+	else if(event->keyval == 65364)//down
+		b_alpha(alpha =(alpha/1.5)<0.0001?0.0001:(alpha/1.5));
+	else if(event->keyval ==44)//enter
+		b_scale(0.75);
+	else if(event->keyval ==46)//enter
+		b_scale(1.5);
+	gdk_window_invalidate_rect (event->window, NULL, TRUE);
+	return FALSE;
+
 }
 int main( int  argc, char **argv)
 {
@@ -286,11 +316,12 @@ int main( int  argc, char **argv)
 		}
 		devices = devices->next;
 	}
-	gtk_widget_add_events(GTK_WIDGET(da), GDK_SCROLL_MASK|GDK_BUTTON_PRESS_MASK);
+	gtk_widget_add_events(GTK_WIDGET(da), GDK_SCROLL_MASK|GDK_BUTTON_PRESS_MASK|GDK_KEY_PRESS_MASK);
 	g_signal_connect(da, "motion-notify-event", G_CALLBACK(mousemove), NULL);
 	g_signal_connect (da, "scroll-event",G_CALLBACK (cbscroll), NULL);//FIXME:doesn't work with extension events enabled
 	g_signal_connect (da, "button-press-event",G_CALLBACK (cbclicked), NULL);//FIXME:doesn't work with extension events enabled
 	g_signal_connect (da, "button-release-event",G_CALLBACK (cbclicked), NULL);//FIXME:doesn't work with extension events enabled
+	g_signal_connect (window, "key-press-event",G_CALLBACK (cbkeypress), NULL);//FIXME:doesn't work with extension events enabled
 	gdk_input_set_extension_events(da->window, 0xffffffff, GDK_EXTENSION_EVENTS_ALL);
 
 	c_init();
