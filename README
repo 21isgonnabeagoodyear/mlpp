@@ -33,3 +33,4 @@ KNOWN ISSUES
 -no windows version
 -erasing always has a hard edge
 -compositing artifacts, especially when drawing over erased parts (opengl ignores the dst component of the alpha channel calculation) FIXED
+-texture brushes have the wrong alpha channel
