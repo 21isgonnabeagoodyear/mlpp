@@ -29,8 +29,11 @@ KNOWN ISSUES
 -no saving or loading
 -no undo
 -zooming does not always behave as expected
--no mouse input FIXED
 -no windows version
--erasing always has a hard edge
--compositing artifacts, especially when drawing over erased parts (opengl ignores the dst component of the alpha channel calculation) FIXED
 -texture brushes have the wrong alpha channel
+
+CHANGES
+-erasing always has a hard edge FIXED
+-no mouse input FIXED
+-compositing artifacts, especially when drawing over erased parts (opengl ignores the dst component of the alpha channel calculation) FIXED
+-layers have outlines
