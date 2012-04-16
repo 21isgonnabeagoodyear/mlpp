@@ -68,6 +68,7 @@ static void drawlayer(int ind)
 	glBindTexture(GL_TEXTURE_2D, layers[ind].texid);
 	glBegin(GL_QUADS);
 	glColor4f(1,1,1,layers[ind].opacity);
+	glColor4f(layers[ind].opacity,layers[ind].opacity,layers[ind].opacity,layers[ind].opacity);
 //	printf("op %d %f\n", ind, layers[ind].opacity);
 	float xt, yt;
 	float rot = rotation;
@@ -120,7 +121,7 @@ void c_init()
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 	glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
-	glClampColorARB(0x891B, GL_TRUE);//CLAMP_FRAGMENT_COLOR_ARB
+//	glClampColorARB(0x891B, GL_TRUE);//CLAMP_FRAGMENT_COLOR_ARB
 	for(i=0;i<NUMLAYERS;i++)
 	{
 		static float serpi[LAYERSIZE][LAYERSIZE][4];//causes stack overflow if not static
