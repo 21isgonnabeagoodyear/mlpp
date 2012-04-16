@@ -63,7 +63,8 @@ static void untarget()
 static void drawlayer(int ind)
 {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ZERO);//ALPHA CHANNEL DOESN'T MATTER FOR COMPOSITING
+	glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ZERO);//ALPHA CHANNEL DOESN'T MATTER FOR COMPOSITING
 	glBindTexture(GL_TEXTURE_2D, layers[ind].texid);
 	glBegin(GL_QUADS);
 	glColor4f(1,1,1,layers[ind].opacity);
@@ -83,6 +84,8 @@ static void drawlayer(int ind)
 	yt = -1*zoom;
 	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt +pany,0);
 	glEnd();
+	glBindTexture(GL_TEXTURE_2D, 0);
+
 	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 }
 static void drawwheel()
@@ -116,6 +119,8 @@ void c_init()
 	glEnable(GL_BLEND);
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
+	glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
+	glClampColorARB(0x891B, GL_TRUE);//CLAMP_FRAGMENT_COLOR_ARB
 	for(i=0;i<NUMLAYERS;i++)
 	{
 		static float serpi[LAYERSIZE][LAYERSIZE][4];//causes stack overflow if not static
@@ -232,6 +237,7 @@ void c_init()
 		brushes[i].a= 1;
 		brushes[i].texid = 0;
 	}
+	brushes[0].r=brushes[0].g=brushes[0].b=1;
 	brushes[1].scalepressure = 1;
 	brushes[1].size = 2;
 	brushes[1].r = 0.5;
@@ -258,6 +264,9 @@ void c_init()
 			realdata[(i*512+j)*4 + 1] = data[(i*512+j) +1*512*512+ 512];
 			realdata[(i*512+j)*4 + 2] = data[(i*512+j) +2*512*512+ 512];
 			realdata[(i*512+j)*4 + 3] = data[(i*512+j) +3*512*512+ 512];
+			int k;
+			for(k=0;k<4;k++)
+				realdata[(i*512+j)*4 + k] *= ((float)data[(i*512+j) +3*512*512+ 512])/255;//FIXME
 		}
 	}
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, realdata);
@@ -276,9 +285,31 @@ void c_draw()
 	int i;
 	for(i=0;i<NUMLAYERS;i++)
 		drawlayer(i);
-	GLuint err = glGetError();
+	glLineStipple(1, 0xFFFF);
+	glBegin(GL_LINE_STRIP);
+	float colors[NUMLAYERS*3] = {1,1,0, 0,1,1, 1,0,0, 0,1,0};
+	float xt,yt;
+	float rot = rotation;
+	glColor4f(colors[3*currentlayer],colors[3*currentlayer+1],colors[3*currentlayer+2],1);
+	xt = -1*zoom;
+	yt = -1*zoom;
+	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	xt = -1*zoom;
+	yt = 1*zoom;
+	glTexCoord2f(0,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	xt = 1*zoom;
+	yt = 1*zoom;
+	glTexCoord2f(1,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	xt = 1*zoom;
+	yt = -1*zoom;
+	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt +pany,0);
+	xt = -1*zoom;
+	yt = -1*zoom;
+	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glEnd();
 	if(renderwheel)
 		drawwheel();
+	GLuint err = glGetError();
 	if(err != 0)
 		printf("gl error %d\n", err);
 }
@@ -297,6 +328,7 @@ void c_windowsize(float x, float y)
 void c_layeropacity(float change)
 {
 	layers[currentlayer].opacity = (layers[currentlayer].opacity + change > 0)?((layers[currentlayer].opacity + change <= 1)?layers[currentlayer].opacity + change:1 ):0;
+	//FIXME:have to multiply layer data by newalpha/oldalpha
 }
 void b_color(float r, float g, float b, float a)
 {
@@ -314,6 +346,7 @@ void b_switch(int brush)
 }
 void b_mode(int m)
 {
+//TODO:fix premultiplied alpha
 	brushes[selectedbrush].erase = m;
 }
 void b_alpha(float a)
@@ -383,19 +416,24 @@ void c_paint(float x, float y, float pressure)
 	glBindTexture(GL_TEXTURE_2D,brushes[selectedbrush].texid);
 	//glBindTexture(GL_TEXTURE_2D,0);//disable texturing
 //	glDisable(GL_TEXTURE_2D);
-	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
+	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+//	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 	if(brushes[selectedbrush].erase)
-		glBlendFuncSeparate(GL_ZERO, GL_ONE, GL_ONE, GL_ZERO);
+		glBlendFunc(GL_ZERO, GL_ZERO);
 	
 	glBegin(GL_TRIANGLE_FAN);
 	glTexCoord2f(0.5,0.5);
-	glColor4f(brushes[selectedbrush].r, brushes[selectedbrush].g,brushes[selectedbrush].b, pressure*brushes[selectedbrush].a);
-	if(brushes[selectedbrush].erase)
-		glColor4f(brushes[selectedbrush].r, brushes[selectedbrush].g,brushes[selectedbrush].b, 0);//blending doesn't work so good with erasing
+	float a = pressure*brushes[selectedbrush].a;
+//	if(brushes[selectedbrush].erase)
+//		glColor4f(0,0,0, 0);//blending doesn't work so good with erasing//FIXME:make this work with premultiplied alpha
+//	else
+	glColor4f(brushes[selectedbrush].r*a, brushes[selectedbrush].g*a,brushes[selectedbrush].b*a, a);
 	glVertex3f(x     , y, 0);
 	if(brushes[selectedbrush].softedge)
-		glColor4f(brushes[selectedbrush].r, brushes[selectedbrush].g,brushes[selectedbrush].b, 0);
+		a = 0;
+//	if(!brushes[selectedbrush].erase)
+	glColor4f(brushes[selectedbrush].r*a, brushes[selectedbrush].g*a,brushes[selectedbrush].b*a, a);
 	float spinoffs;
 	if(brushes[selectedbrush].spin)
 		spinoffs = rand()/(float)RAND_MAX*PI*2;
@@ -412,7 +450,6 @@ void c_paint(float x, float y, float pressure)
 	}
 
 	glEnd();
-	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 	glEnable(GL_TEXTURE_2D);
 	untarget();
 }

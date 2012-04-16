@@ -79,7 +79,7 @@ static gboolean  mousemove(GtkWidget *widget, GdkEventMotion *event)
 	pressure = stuff[2];
 	//gdk_input_window_get_pointer(event->window, event->device, NULL, NULL, &pressure, NULL,NULL,NULL);
 
-if(pressure ==0 && event->state & GDK_BUTTON1_MASK)
+if(event->device->source == GDK_SOURCE_MOUSE&& event->state & GDK_BUTTON1_MASK)
 	pressure = 1;
 //printf("mvd\n");
 	if(event->state & GDK_BUTTON2_MASK)
@@ -333,6 +333,5 @@ int main( int  argc, char **argv)
 	gdk_input_set_extension_events(da->window, 0xffffffff, GDK_EXTENSION_EVENTS_ALL);
 
 	c_init();
-	b_color(0.5,0.5,1,0.1);
 	gtk_main();
 }
