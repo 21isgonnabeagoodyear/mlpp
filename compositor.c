@@ -94,6 +94,8 @@ static void drawwheel()
 	glBindTexture(GL_TEXTURE_2D, wheeltexture);
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(1,1,1,1);
+//	glColor4f(0.5,0.5,0.5,0.5);
+//	glColor4f(brushes[selectedbrush].r+0.1,brushes[selectedbrush].g+0.1,brushes[selectedbrush].b+0.1,1);
 	glTexCoord2f(0,0);
 	glVertex3f(-0.8*windowa+wheelx,-0.8+wheely,0);
 	glTexCoord2f(1,0);
@@ -267,7 +269,7 @@ void c_init()
 			realdata[(i*512+j)*4 + 3] = data[(i*512+j) +3*512*512+ 512];
 			int k;
 			for(k=0;k<4;k++)
-				realdata[(i*512+j)*4 + k] *= ((float)data[(i*512+j) +3*512*512+ 512])/255;//FIXME
+				realdata[(i*512+j)*4 + k] *= ((float)data[(i*512+j) +3*512*512+ 512])/255.f;//FIXME
 		}
 	}
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, realdata);
@@ -421,7 +423,8 @@ void c_paint(float x, float y, float pressure)
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 //	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 	if(brushes[selectedbrush].erase)
-		glBlendFunc(GL_ZERO, GL_ZERO);
+		glBlendFuncSeparate(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
+	//	glBlendFunc(GL_ZERO, GL_ZERO);
 	
 	glBegin(GL_TRIANGLE_FAN);
 	glTexCoord2f(0.5,0.5);
