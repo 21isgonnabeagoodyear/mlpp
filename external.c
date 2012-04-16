@@ -1,5 +1,5 @@
 
-//gcc -g -o main `pkg-config --cflags --libs gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0` external.c
+//gcc -g -o mlpp `pkg-config --cflags --libs gtk+-2.0 gtkglext-1.0 gtkglext-x11-1.0` external.c
 
 #include <gtk/gtk.h>
 #include <gtk/gtkgl.h>
@@ -11,6 +11,7 @@
 
 #include "compositor.c"
 static float cursorx, cursory, pressure;
+static float dragpx, dragpy;
 static float precursorx, precursory, prepressure;
 static float zoom;
 
@@ -25,6 +26,7 @@ static gboolean cbredraw(GtkWidget *da, GdkEventExpose *event, gpointer user_dat
 	{
 		g_assert_not_reached ();
 	}
+//	glClearColor(1,1,1,1);
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 		//glVertex3f(2*x/gdk_window_get_width(da->window)-1  +0.1*sin(j*3.14/5)     , 1-2*y/gdk_window_get_height(da->window) + 0.1*cos(j*3.14/5), 0);
 	//do shit here
@@ -66,6 +68,8 @@ static gboolean cbconfigure(GtkWidget *da, GdkEventConfigure *event, gpointer us
 static gboolean  mousemove(GtkWidget *widget, GdkEventMotion *event)
 {
 	//printf("clicked\n");
+//	if(event->device->num_axes < 2)
+//		return 1;
 	double stuff[1000];
 	gdk_device_get_state( event->device,event->window, stuff, NULL);
 	int i;
@@ -75,10 +79,21 @@ static gboolean  mousemove(GtkWidget *widget, GdkEventMotion *event)
 	pressure = stuff[2];
 	//gdk_input_window_get_pointer(event->window, event->device, NULL, NULL, &pressure, NULL,NULL,NULL);
 
-
-
-
-
+if(pressure ==0 && event->state & GDK_BUTTON1_MASK)
+	pressure = 1;
+//printf("mvd\n");
+	if(event->state & GDK_BUTTON2_MASK)
+	{
+		float dragtx = cursorx/gdk_window_get_width(widget->window) - dragpx;
+		float dragty = cursory/gdk_window_get_height(widget->window) - dragpy;
+		c_translate(dragtx, dragty);
+		//c_rotation(atan(-(cursorx - gdk_window_get_width(widget->window)/2)/( cursory-gdk_window_get_width(widget->window)/2)));	
+		//c_rotation(atan((dragtx-dragpx)/(dragty-dragpy)));	
+//		c_rotation(atan((dragty-dragpy)/(dragtx-dragpx)));	
+		
+	}
+	dragpx = cursorx/gdk_window_get_width(widget->window);
+	dragpy = cursory/gdk_window_get_height(widget->window);
 
 
 
@@ -153,22 +168,22 @@ static gboolean cbscroll(GtkWidget *widget, GdkEventScroll *event, gpointer notu
 }
 static gboolean cbclicked(GtkWidget *widget, GdkEventButton *event, gpointer notused)
 {
-printf("clicked %d\n", event->button);
+//printf("clicked %d\n", event->button);
 	float rx, ry;
-	static float dragtx, dragty;
+	//static float dragtx, dragty;
 	if(event->axes ==NULL)
 	{
 		rx = event->x;
 		ry = event->y;
-		printf("x:%f\n", rx);
+//		printf("x:%f\n", rx);
 	}
 	else
-	{printf("derp\n");
+	{//printf("derp\n");
 		rx = cursorx;//event->axes[0];
 		ry = cursory;//event->axes[1];
-		printf("x:%f\n", rx);
-		printf("y:%f\n", ry);
-		printf("x:%d\n", gdk_window_get_width(widget->window));
+//		printf("x:%f\n", rx);
+//		printf("y:%f\n", ry);
+//		printf("x:%d\n", gdk_window_get_width(widget->window));
 	}
 
 
@@ -186,22 +201,7 @@ printf("clicked %d\n", event->button);
 		zoom /= 0.9;
 	else if(event->button == 4)
 		zoom *= 0.9;
-	else if(event->button == 2)
-	{
-		if(event->type == GDK_BUTTON_PRESS)
-		{
-			dragtx = rx/gdk_window_get_width(widget->window);
-			dragty = ry/gdk_window_get_height(widget->window);
-		}
-		else
-		{
-			dragtx = rx/gdk_window_get_width(widget->window) - dragtx;
-			dragty = ry/gdk_window_get_height(widget->window) - dragty;
-			c_translate(dragtx, dragty);
-			printf("translate %f %f\n", dragtx, dragty);
 
-		}
-	}
 	zoom = zoom>1000?1000:zoom;
 	zoom = zoom<0.10?0.10:zoom;
 	c_zoom(zoom);
@@ -212,7 +212,7 @@ printf("clicked %d\n", event->button);
 }
 gboolean cbkeypress(GtkWidget *widget, GdkEventKey *event, gpointer notused)
 {
-	printf("key %d\n", event->keyval);
+//	printf("key %d\n", event->keyval);
 	//if(event->keyval == GDK_bracketleft)
 	static float alpha = 0.5;
 	if(event->keyval == 65361)
@@ -235,6 +235,10 @@ gboolean cbkeypress(GtkWidget *widget, GdkEventKey *event, gpointer notused)
 		b_scale(0.75);
 	else if(event->keyval ==46)//enter
 		b_scale(1.5);
+	else if(event->keyval ==93)//enter
+		c_layeropacity(0.05);
+	else if(event->keyval ==91)//enter
+		c_layeropacity(-0.05);
 	gdk_window_invalidate_rect (event->window, NULL, TRUE);
 	return FALSE;
 
@@ -308,12 +312,16 @@ int main( int  argc, char **argv)
 	while(devices->next != NULL)
 	{
 		int numaxes = gdk_device_get_n_axes(devices->data);
-		printf("found input device %i axes\n", numaxes);
-		if(numaxes > 2)
-		{
+		printf("found input device %s\n", gdk_device_get_name(devices->data));
+//		if(numaxes >= 2)
+//		{
 			if(!gdk_device_set_mode(devices->data, GDK_MODE_SCREEN))
 				printf("failed to enable\n");
-		}
+			else
+				printf("...enabled\n");
+//		}
+//		else
+//			printf("...it's probably not a tablet\n");
 		devices = devices->next;
 	}
 	gtk_widget_add_events(GTK_WIDGET(da), GDK_SCROLL_MASK|GDK_BUTTON_PRESS_MASK|GDK_KEY_PRESS_MASK);
