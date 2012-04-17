@@ -1,9 +1,9 @@
 
 //#define LAYERSIZE 2048
-//#define LAYERSIZE 4096
+#define LAYERSIZE 4096
 //#define LAYERSIZE 1024
-#define LAYERSIZE 2048
-#define NUMLAYERS 4
+//#define LAYERSIZE 2048
+#define NUMLAYERS 2
 #define NUMBRUSHES 10
 #define PI 3.1415926
 #include "atexture.xbm"
@@ -24,6 +24,7 @@ typedef struct
 	char scalepressure;
 	char blur;
 	char spin;
+	char colorshifta;
 } brush_t;
 //typedef char layerdatasmall_t[LAYERSIZE][4];
 
@@ -168,17 +169,6 @@ void c_init()
 	layers[1].opacity = 1;
 	
 */
-	static unsigned char serpi[LAYERSIZE][LAYERSIZE][4];//causes stack overflow if not static
-//	layerdatasmall_t *serpi = malloc(sizeof(char)*4*LAYERSIZE*LAYERSIZE);//we could have it on the heap too 
-	//for(i=0;i<LAYERSIZE;i++)
-	//	for(j=0;j<LAYERSIZE;j++)
-	//		serpi[i][j][0] = serpi[i][j][3]=1;
-	glBindTexture(GL_TEXTURE_2D, layers[1].texid);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, serpi);
-	layers[1].opacity = 1;
-	glBindTexture(GL_TEXTURE_2D, layers[0].texid);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, serpi);
-	layers[0].opacity = 1;
 //initialize wheel texture
 	static float serpiw[512][512][4];//causes stack overflow if not static
 	glGenTextures(1,&wheeltexture);
@@ -283,6 +273,12 @@ void c_init()
 	brushes[5].a= 0.1;
 	brushes[6] = brushes[5];
 	brushes[6].blur = 1;
+	brushes[6].a= 0.4;
+	brushes[7] = brushes[5];
+	brushes[7].colorshifta = 1;
+	brushes[7].b = 0.2;
+	brushes[7].g = 0.5;
+	brushes[7].a= 1.8;
 }
 
 void c_draw()
@@ -438,6 +434,8 @@ void c_paint(float x, float y, float pressure)
 	glBegin(GL_TRIANGLE_FAN);
 	glTexCoord2f(0.5,0.5);
 	float a = pressure*brushes[selectedbrush].a;
+	if(!brushes[selectedbrush].colorshifta)
+		clamp(&a,0,1);
 //	if(brushes[selectedbrush].erase)
 //		glColor4f(0,0,0, 0);//blending doesn't work so good with erasing//FIXME:make this work with premultiplied alpha
 //	else
@@ -490,14 +488,28 @@ void c_viscursor(float x, float y )
 		glColor4f(brushes[selectedbrush].r, brushes[selectedbrush].g,brushes[selectedbrush].b, 1);
 		glLineStipple(1, 0xFFFF);
 	}
-	glBegin(GL_LINE_STRIP);
+//	glBlendFunc(GL_ONE, GL_ONE);
+	if(brushes[selectedbrush].texid == 0 || brushes[selectedbrush].blur || renderwheel)//TODO:maybe a better way to do this?  whatever
+		glBegin(GL_LINE_STRIP);
+	else
+	{
+		glBindTexture(GL_TEXTURE_2D, brushes[selectedbrush].texid);
+		glBegin(GL_TRIANGLE_FAN);
+		glTexCoord2f(0.5,0.5);
+		glVertex3f(x,y,0);
+	}
 	int j;
 	for(j=0;j<21;j++)
 	{
+		//glTexCoord2f(sin(j*PI/10)*0.5+0.5     , cos(j*PI/10)*0.5+0.5);
 		glTexCoord2f(sin(j*PI/10)*0.5+0.5     , cos(j*PI/10)*0.5+0.5);
 		glVertex3f(x  +0.1*sin(j*PI/10)*windowa*brushes[selectedbrush].size, y + 0.1*cos(j*PI/10)*brushes[selectedbrush].size, 0);
+/*		if(brushes[selectedbrush].texid != 0)//draw an inner circle if we're visualizing a texture, so point sampling works
+		{
+			glTexCoord2f(sin(j*PI/10)*0.05+0.5     , cos(j*PI/10)*0.05+0.5);
+			glVertex3f(x  +0.01*sin(j*PI/10)*windowa*brushes[selectedbrush].size, y + 0.01*cos(j*PI/10)*brushes[selectedbrush].size, 0);
+		}*/
 	}
-
 	glEnd();
 	glEnable(GL_TEXTURE_2D);
 }
