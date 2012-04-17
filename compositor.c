@@ -45,6 +45,8 @@ static GLuint wheeltexture;
 static int renderwheel = 0;
 static float wheelx, wheely;
 
+static inline void clamp(float *value, float min, float max){*value = *value>max?max:*value<min?min:*value;}
+
 static void target(GLuint texid)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);//switch fbos
@@ -74,16 +76,16 @@ static void drawlayer(int ind)
 	float rot = rotation;
 	xt = -1*zoom;
 	yt = -1*zoom;
-	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	xt = -1*zoom;
 	yt = 1*zoom;
-	glTexCoord2f(0,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(0,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	xt = 1*zoom;
 	yt = 1*zoom;
-	glTexCoord2f(1,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(1,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	xt = 1*zoom;
 	yt = -1*zoom;
-	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt +pany,0);
+	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt +pany*zoom,0);
 	glEnd();
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -111,9 +113,9 @@ static void wtos(float *x, float *y)
 {
 	if(x != NULL)
 		//*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa/zoom;
-		*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa/zoom;
+		*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa;
 	if(y!= NULL)
-		*y = ((*y-0.5)*-2)/zoom-pany/zoom;
+		*y = ((*y-0.5)*-2)/zoom-pany;
 }
 void c_init()
 {
@@ -204,7 +206,7 @@ void c_init()
 				serpiw[i][j][1] = (greens[index]*offset + greens[index+1]*(1-offset))+brightness;
 				serpiw[i][j][2] = (blues[index]*offset + blues[index+1]*(1-offset))+brightness;
 				int k;
-				for(k=0;k<3;k++)if(brightness>0.5)serpiw[i][j][k]+=brightness*2-1;else serpiw[i][j][k]*=brightness*2;
+				for(k=0;k<3;k++)if(brightness>0.5)serpiw[i][j][k]+=brightness-0.5;else serpiw[i][j][k]*=brightness*2;
 			}
 			else if(i < 100)
 			{
@@ -237,7 +239,7 @@ void c_init()
 	for(i=0;i<NUMBRUSHES;i++)
 	{
 		brushes[i].size = 1;
-		brushes[i].a= 1;
+		brushes[i].a= 0.75;
 		brushes[i].texid = 0;
 	}
 	brushes[0].r=brushes[0].g=brushes[0].b=1;
@@ -256,20 +258,21 @@ void c_init()
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 
 	FILE *f = fopen("atexture.rgba", "r");
-	char data[512*512*4+512];
+	unsigned char data[512*512*4+512];
 	fread(data, 1, 512*512*4+512, f);
-	char realdata[512*512*4];
+	unsigned char realdata[512*512*4];
 	for(i=0;i<512;i++)
 	{
 		for(j=0;j<512;j++)
 		{
-			realdata[(i*512+j)*4 + 0] = data[(i*512+j) +0*512*512+ 512];
-			realdata[(i*512+j)*4 + 1] = data[(i*512+j) +1*512*512+ 512];
-			realdata[(i*512+j)*4 + 2] = data[(i*512+j) +2*512*512+ 512];
-			realdata[(i*512+j)*4 + 3] = data[(i*512+j) +3*512*512+ 512];
-			int k;
-			for(k=0;k<4;k++)
-				realdata[(i*512+j)*4 + k] *= ((float)data[(i*512+j) +3*512*512+ 512])/255.f;//FIXME
+			float alpha = ((float)data[(i*512+j) +3*512*512+ 512])/255.f;
+			realdata[(i*512+j)*4 + 0] = alpha*data[(i*512+j) +0*512*512+ 512];//*alpha;
+			realdata[(i*512+j)*4 + 1] = alpha*data[(i*512+j) +1*512*512+ 512];//*alpha;
+			realdata[(i*512+j)*4 + 2] = alpha*data[(i*512+j) +2*512*512+ 512];//*alpha;
+			realdata[(i*512+j)*4 + 3] = alpha*255;//data[(i*512+j) +3*512*512+ 512];
+//			int k;
+//			for(k=0;k<3;k++)
+//				realdata[(i*512+j)*4 + k] = 255*((float)realdata[(i*512+j)*4 + k]/255.f  *  ((float)realdata[(i*512+j)*4 + 4])/255);//FIXME
 		}
 	}
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, realdata);
@@ -278,6 +281,8 @@ void c_init()
 	brushes[5].g= 1;
 	brushes[5].b= 1;
 	brushes[5].a= 0.1;
+	brushes[6] = brushes[5];
+	brushes[6].blur = 1;
 }
 
 void c_draw()
@@ -296,19 +301,19 @@ void c_draw()
 	glColor4f(colors[3*currentlayer],colors[3*currentlayer+1],colors[3*currentlayer+2],1);
 	xt = -1*zoom;
 	yt = -1*zoom;
-	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	xt = -1*zoom;
 	yt = 1*zoom;
-	glTexCoord2f(0,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(0,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	xt = 1*zoom;
 	yt = 1*zoom;
-	glTexCoord2f(1,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(1,1);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	xt = 1*zoom;
 	yt = -1*zoom;
-	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx,cos(rot)*yt-sin(rot)*xt +pany,0);
+	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt +pany*zoom,0);
 	xt = -1*zoom;
 	yt = -1*zoom;
-	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx,cos(rot)*yt-sin(rot)*xt + pany,0);
+	glTexCoord2f(0,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa +panx*zoom,cos(rot)*yt-sin(rot)*xt + pany*zoom,0);
 	glEnd();
 	if(renderwheel)
 		drawwheel();
@@ -320,7 +325,6 @@ void c_draw()
 void c_selectlayer(int lay)
 {
 	currentlayer = lay % NUMLAYERS;
-printf("switch layer %i\n", lay);
 }
 void c_windowsize(float x, float y)
 {
@@ -364,7 +368,13 @@ void c_zoom(float zto)
 {
 //	panx = zoom*panx/zto;
 //	pany = zoom*pany/zto;
+//	panx *= zto/zoom;
+//	pany *= zto/zoom;
 	zoom = zto;
+//	panx = panx*zoom>1?1:panx*zoom<-1?-1:panx;
+//	pany = pany*zoom>1?1:pany*zoom<-1?-1:pany;
+	clamp(&panx, -1/zoom - 1, 1/zoom + 1);
+	clamp(&pany, -1/zoom - 1, 1/zoom + 1);
 }
 void c_showwheel(float x, float y)
 {
@@ -378,8 +388,10 @@ void c_hidewheel()
 }
 void c_translate(float dx, float dy)
 {
-	panx += dx*2;
-	pany -= dy*2;
+	panx += dx*2/zoom;
+	pany -= dy*2/zoom;
+	clamp(&panx, -1/zoom - 1, 1/zoom + 1);
+	clamp(&pany, -1/zoom - 1, 1/zoom + 1);
 }
 void c_rotate(float dtheta)
 {
@@ -392,7 +404,6 @@ void c_rotation(float theta)
 void c_droppersample(float x, float y)
 {
 	float retrieved[4*4];
-//printf("windoww %f windowh %f", windoww, windowh);
 	glReadPixels(x*windoww, (1-y)*windowh, 2,2,GL_RGBA, GL_FLOAT, retrieved);
 	retrieved[0] = (retrieved[0]+retrieved[4]+retrieved[8]+retrieved[12])/4;
 	retrieved[1] = (retrieved[1]+retrieved[5]+retrieved[9]+retrieved[13])/4;
@@ -402,8 +413,6 @@ void c_droppersample(float x, float y)
 	brushes[selectedbrush].r = retrieved[0];
 	brushes[selectedbrush].g = retrieved[1];
 	brushes[selectedbrush].b = retrieved[2];
-//	brushes[selectedbrush].a = 0.5;//retrieved[3];
-//printf("sampled\n");
 }
 
 void c_paint(float x, float y, float pressure)
