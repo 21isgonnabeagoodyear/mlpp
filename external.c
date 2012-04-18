@@ -26,7 +26,7 @@ static gboolean cbredraw(GtkWidget *da, GdkEventExpose *event, gpointer user_dat
 	{
 		g_assert_not_reached ();
 	}
-//	glClearColor(1,1,1,1);
+	glClearColor(0,0,0,0);
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 		//glVertex3f(2*x/gdk_window_get_width(da->window)-1  +0.1*sin(j*3.14/5)     , 1-2*y/gdk_window_get_height(da->window) + 0.1*cos(j*3.14/5), 0);
 	//do shit here
@@ -80,7 +80,7 @@ static gboolean  mousemove(GtkWidget *widget, GdkEventMotion *event)
 	//gdk_input_window_get_pointer(event->window, event->device, NULL, NULL, &pressure, NULL,NULL,NULL);
 
 if(event->device->source == GDK_SOURCE_MOUSE&& event->state & GDK_BUTTON1_MASK)
-	pressure = 1;
+	pressure = 0.5;
 //printf("mvd\n");
 	if(event->state & GDK_BUTTON2_MASK)
 	{
@@ -111,7 +111,7 @@ if(event->device->source == GDK_SOURCE_MOUSE&& event->state & GDK_BUTTON1_MASK)
 	}
 	//do shit here
 	c_windowsize(gdk_window_get_width(widget->window), gdk_window_get_height(widget->window));
-	if(pressure > 0)
+	/*if(pressure > 0)
 	{
 		int i;
 		int numsamples = ceil(sqrt((cursorx - precursorx)*(cursorx - precursorx) + (cursory - precursory)* (cursory - precursory) )*0.5);
@@ -121,10 +121,11 @@ if(event->device->source == GDK_SOURCE_MOUSE&& event->state & GDK_BUTTON1_MASK)
 			float cx = (cursorx * i + precursorx * (numsamples-i) )/ numsamples;
 			float cy = (cursory * i + precursory * (numsamples-i) )/ numsamples;
 			float p = 0.01+(pressure * i + prepressure * (numsamples-i) )/ numsamples;
-			c_paint(cx/gdk_window_get_width(widget->window),cy/gdk_window_get_height(widget->window),p*p);
+			//c_paint(cx/gdk_window_get_width(widget->window),cy/gdk_window_get_height(widget->window),p*p);
 		}
 
-	}
+	}*/
+	c_paintline(cursorx/gdk_window_get_width(widget->window), cursory/gdk_window_get_height(widget->window), pressure*pressure,  precursorx/gdk_window_get_width(widget->window), precursory/gdk_window_get_height(widget->window), prepressure*prepressure);
 
 	precursorx = cursorx;
 	precursory = cursory;
@@ -221,6 +222,8 @@ gboolean cbkeypress(GtkWidget *widget, GdkEventKey *event, gpointer notused)
 		c_rotate(-PI/32);
 	else if(event->keyval >=49 && event->keyval <=57 )//keys 1,2,3,4
 		b_switch(event->keyval - 49);
+	else if(event->keyval == 48)
+		b_switch(9);
 	else if(event->keyval >=65470 && event->keyval <=65474 )//f1-f4
 		c_selectlayer(event->keyval - 65470);
 	else if(event->keyval ==65535)//del
@@ -239,6 +242,8 @@ gboolean cbkeypress(GtkWidget *widget, GdkEventKey *event, gpointer notused)
 		c_layeropacity(0.05);
 	else if(event->keyval ==91)//enter
 		c_layeropacity(-0.05);
+	else
+		printf("unbound key %d\n", event->keyval);
 	gdk_window_invalidate_rect (event->window, NULL, TRUE);
 	return FALSE;
 
@@ -281,7 +286,7 @@ int main( int  argc, char **argv)
 
 	/* prepare GL */
 	glconfig = gdk_gl_config_new_by_mode (
-			GDK_GL_MODE_RGB |
+			GDK_GL_MODE_RGBA |
 			//		GDK_GL_MODE_DEPTH |
 			GDK_GL_MODE_DOUBLE);
 

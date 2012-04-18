@@ -1,10 +1,14 @@
 
-//#define LAYERSIZE 2048
-#define LAYERSIZE 4096
+
+//with 512mb we can theoretically store 61x1024 or 15x2048 or 3x4096
+//with 1gb we can theoretically store 119x1024 or 29x2048 or 7x4096 or 1x8192
+//quadruple that for 8 bit textures
 //#define LAYERSIZE 1024
 //#define LAYERSIZE 2048
+#define LAYERSIZE 4096
+//#define LAYERSIZE 8192
 #define NUMLAYERS 2
-#define NUMBRUSHES 10
+#define NUMBRUSHES 11//why 11 and not 10?
 #define PI 3.1415926
 #include "atexture.xbm"
 
@@ -19,12 +23,14 @@ typedef struct
 	GLuint texid;
 	float r,g,b,a;
 	float size;
+	float density;
 	char softedge;
 	char erase;
 	char scalepressure;
 	char blur;
 	char spin;
 	char colorshifta;
+	char constantsize;
 } brush_t;
 //typedef char layerdatasmall_t[LAYERSIZE][4];
 
@@ -48,14 +54,14 @@ static float wheelx, wheely;
 
 static inline void clamp(float *value, float min, float max){*value = *value>max?max:*value<min?min:*value;}
 
-static void target(GLuint texid)
+static void target(GLuint texid, int resx, int resy)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);//switch fbos
 	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texid, 0);//attach texture
 	int fbores = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if(fbores != GL_FRAMEBUFFER_COMPLETE)
 		printf("incomplete framebuffer %d\n", fbores);
-	glViewport(0,0,LAYERSIZE,LAYERSIZE);
+	glViewport(0,0,resx,resy);
 }
 static void untarget()
 {
@@ -65,14 +71,11 @@ static void untarget()
 
 static void drawlayer(int ind)
 {
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ZERO);//ALPHA CHANNEL DOESN'T MATTER FOR COMPOSITING
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	glBindTexture(GL_TEXTURE_2D, layers[ind].texid);
 	glBegin(GL_QUADS);
 	glColor4f(1,1,1,layers[ind].opacity);
 	glColor4f(layers[ind].opacity,layers[ind].opacity,layers[ind].opacity,layers[ind].opacity);
-//	printf("op %d %f\n", ind, layers[ind].opacity);
 	float xt, yt;
 	float rot = rotation;
 	xt = -1*zoom;
@@ -89,8 +92,6 @@ static void drawlayer(int ind)
 	glTexCoord2f(1,0);glVertex3f((cos(rot)*xt+sin(rot)*yt)*windowa + panx*zoom,cos(rot)*yt-sin(rot)*xt +pany*zoom,0);
 	glEnd();
 	glBindTexture(GL_TEXTURE_2D, 0);
-
-	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 }
 static void drawwheel()
 {
@@ -110,65 +111,76 @@ static void drawwheel()
 	glEnd();
 
 }
-static void wtos(float *x, float *y)
+static void wtol(float *x, float *y)
 {
-	if(x != NULL)
-		//*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa/zoom;
 		*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa;
-	if(y!= NULL)
 		*y = ((*y-0.5)*-2)/zoom-pany;
+	if(x != NULL)
+	{	//*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa/zoom;
+		float tx = -*y, ty=*x;//don't fucking touch this shit
+		float ay = sin(rotation)*ty - cos(rotation)*tx;
+		float ax = sin(rotation)*tx + cos(rotation)*ty;
+		*x = ax;
+	}
+	if(y!= NULL)
+	{
+		float tx = -*y, ty=*x;//don't fucking touch this shit
+		float ay = sin(rotation)*ty - cos(rotation)*tx;
+		float ax = sin(rotation)*tx + cos(rotation)*ty;
+		*y = ay;
+	}
+}
+static GLuint loadtex(char *filename)
+{
+	GLuint rval;
+	int i,j;
+	glGenTextures(1, &rval);
+	glBindTexture(GL_TEXTURE_2D, rval);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+
+	FILE *f = fopen(filename, "r");
+	unsigned char data[512*512*4+512];
+	fread(data, 1, 512*512*4+512, f);
+	unsigned char realdata[512*512*4];
+	for(i=0;i<512;i++)
+	{
+		for(j=0;j<512;j++)
+		{
+			float alpha = ((float)data[(i*512+j) +3*512*512+ 512])/255.f;
+			realdata[(i*512+j)*4 + 0] = alpha*data[(i*512+j) +0*512*512+ 512];//*alpha;
+			realdata[(i*512+j)*4 + 1] = alpha*data[(i*512+j) +1*512*512+ 512];//*alpha;
+			realdata[(i*512+j)*4 + 2] = alpha*data[(i*512+j) +2*512*512+ 512];//*alpha;
+			realdata[(i*512+j)*4 + 3] = alpha*255;//data[(i*512+j) +3*512*512+ 512];
+		}
+	}
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, realdata);
+	return rval;
 }
 void c_init()
 {
 	int i, j;
 	glEnable(GL_TEXTURE_2D);
 	glEnable(GL_BLEND);
+	glGenFramebuffers(1,&fbo);
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 	glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 //	glClampColorARB(0x891B, GL_TRUE);//CLAMP_FRAGMENT_COLOR_ARB
+	glClearColor(1,1,1,1);
 	for(i=0;i<NUMLAYERS;i++)
 	{
-		static float serpi[LAYERSIZE][LAYERSIZE][4];//causes stack overflow if not static
 		glGenTextures(1,&layers[i].texid);
 		glBindTexture(GL_TEXTURE_2D, layers[i].texid);
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_FLOAT, serpi);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);//clear instead of uploading to not use lods of ram
+		target(layers[i].texid, LAYERSIZE, LAYERSIZE);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glClearColor(0,0,0,0);
+		untarget();
 		layers[i].opacity = 1;
-	//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_FLOAT, NULL);
 	}
-
-	glGenFramebuffers(1,&fbo);
-	//make some more textures and shit here
-//TODO:after this to be removed
-/*	glBindTexture(GL_TEXTURE_2D, layers[0].texid);
-	static float serpi[LAYERSIZE][LAYERSIZE][4];//causes stack overflow if not static
-	for(i=0;i<LAYERSIZE;i++)
-	{
-		for(j=0;j<LAYERSIZE;j++)
-		{
-			serpi[i][j][0] = (j+i<LAYERSIZE)?((j&i) == 0):(((LAYERSIZE-j)&(LAYERSIZE-i)) == 0);
-			serpi[i][j][3] = 1;
-		}
-	}
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_FLOAT, serpi);
-	layers[0].opacity = 1;
-
-	for(i=0;i<LAYERSIZE;i++)
-	{
-		for(j=0;j<LAYERSIZE;j++)
-		{
-			serpi[i][j][0]=0;
-			serpi[i][j][3]=serpi[i][j][1] = fabs(sin(i*0.1)+cos(j*0.1))*0.5;
-		}
-	}
-	glBindTexture(GL_TEXTURE_2D, layers[1].texid);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, LAYERSIZE, LAYERSIZE, 0, GL_RGBA, GL_FLOAT, serpi);
-	layers[1].opacity = 1;
-	
-*/
 //initialize wheel texture
 	static float serpiw[512][512][4];//causes stack overflow if not static
 	glGenTextures(1,&wheeltexture);
@@ -231,8 +243,9 @@ void c_init()
 		brushes[i].size = 1;
 		brushes[i].a= 0.75;
 		brushes[i].texid = 0;
+		brushes[i].density = 100;
 	}
-	brushes[0].r=brushes[0].g=brushes[0].b=1;
+	brushes[0].r=brushes[0].g=brushes[0].b=0.5;
 	brushes[1].scalepressure = 1;
 	brushes[1].size = 2;
 	brushes[1].r = 0.5;
@@ -242,30 +255,8 @@ void c_init()
 	brushes[4].blur = 1;
 //	brushes[4].softedge= 1;
 	brushes[4].a= 0.1;
-	glGenTextures(1, &brushes[5].texid);
-	glBindTexture(GL_TEXTURE_2D, brushes[5].texid);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 
-	FILE *f = fopen("atexture.rgba", "r");
-	unsigned char data[512*512*4+512];
-	fread(data, 1, 512*512*4+512, f);
-	unsigned char realdata[512*512*4];
-	for(i=0;i<512;i++)
-	{
-		for(j=0;j<512;j++)
-		{
-			float alpha = ((float)data[(i*512+j) +3*512*512+ 512])/255.f;
-			realdata[(i*512+j)*4 + 0] = alpha*data[(i*512+j) +0*512*512+ 512];//*alpha;
-			realdata[(i*512+j)*4 + 1] = alpha*data[(i*512+j) +1*512*512+ 512];//*alpha;
-			realdata[(i*512+j)*4 + 2] = alpha*data[(i*512+j) +2*512*512+ 512];//*alpha;
-			realdata[(i*512+j)*4 + 3] = alpha*255;//data[(i*512+j) +3*512*512+ 512];
-//			int k;
-//			for(k=0;k<3;k++)
-//				realdata[(i*512+j)*4 + k] = 255*((float)realdata[(i*512+j)*4 + k]/255.f  *  ((float)realdata[(i*512+j)*4 + 4])/255);//FIXME
-		}
-	}
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, realdata);
+	brushes[5].texid = loadtex("atexture.rgba");
 	brushes[5].spin = 1;
 	brushes[5].r= 1;
 	brushes[5].g= 1;
@@ -279,6 +270,12 @@ void c_init()
 	brushes[7].b = 0.2;
 	brushes[7].g = 0.5;
 	brushes[7].a= 1.8;
+	brushes[8].constantsize = 1;
+	brushes[8].texid = loadtex("anothertexture.rgba");
+	brushes[9].texid = loadtex("gimpgalaxybig.rgba");
+	brushes[9].density = 500;
+	brushes[9].a = 0.5;
+	brushes[9].scalepressure = 1;
 }
 
 void c_draw()
@@ -291,7 +288,7 @@ void c_draw()
 		drawlayer(i);
 	glLineStipple(1, 0xFFFF);
 	glBegin(GL_LINE_STRIP);
-	float colors[NUMLAYERS*3] = {1,1,0, 0,1,1, 1,0,0, 0,1,0};
+	float colors[/*NUMLAYERS*/4*3] = {1,1,0, 0,1,1, 1,0,0, 0,1,0};//must be at least NUMLAYERS*3, but not doing that since NUMLAYERS can be less than 3
 	float xt,yt;
 	float rot = rotation;
 	glColor4f(colors[3*currentlayer],colors[3*currentlayer+1],colors[3*currentlayer+2],1);
@@ -315,7 +312,7 @@ void c_draw()
 		drawwheel();
 	GLuint err = glGetError();
 	if(err != 0)
-		printf("gl error %d\n", err);
+		printf("gl error %x\n", err);
 }
 
 void c_selectlayer(int lay)
@@ -399,11 +396,16 @@ void c_rotation(float theta)
 }
 void c_droppersample(float x, float y)
 {
+//	c_draw();//redraw to not catch old cursors etc FIXME:this doesn't work and is slow as shit
+	untarget();
 	float retrieved[4*4];
 	glReadPixels(x*windoww, (1-y)*windowh, 2,2,GL_RGBA, GL_FLOAT, retrieved);
 	retrieved[0] = (retrieved[0]+retrieved[4]+retrieved[8]+retrieved[12])/4;
 	retrieved[1] = (retrieved[1]+retrieved[5]+retrieved[9]+retrieved[13])/4;
 	retrieved[2] = (retrieved[2]+retrieved[6]+retrieved[10]+retrieved[14])/4;
+	retrieved[3] = (retrieved[3]+retrieved[7]+retrieved[11]+retrieved[15])/4;
+//	if(retrieved[3] == 0)
+//		return;
 
 
 	brushes[selectedbrush].r = retrieved[0];
@@ -413,17 +415,7 @@ void c_droppersample(float x, float y)
 
 void c_paint(float x, float y, float pressure)
 {
-	if(brushes[selectedbrush].blur)
-		c_droppersample(x,y);
-
-	wtos(&x, &y);
-	float tx = -y, ty=x;//don't fucking touch this shit
-	y = sin(rotation)*ty - cos(rotation)*tx;
-	x = sin(rotation)*tx + cos(rotation)*ty;
-	target(layers[currentlayer].texid);
 	glBindTexture(GL_TEXTURE_2D,brushes[selectedbrush].texid);
-	//glBindTexture(GL_TEXTURE_2D,0);//disable texturing
-//	glDisable(GL_TEXTURE_2D);
 	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 //	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
@@ -449,24 +441,41 @@ void c_paint(float x, float y, float pressure)
 	if(brushes[selectedbrush].spin)
 		spinoffs = rand()/(float)RAND_MAX*PI*2;
 	int j;
+	float brushsize = 0.1*brushes[selectedbrush].size;
+	if(brushes[selectedbrush].scalepressure)
+		brushsize *= pressure;
+	if(!brushes[selectedbrush].constantsize)
+		brushsize /= zoom;
 	for(j=0;j<51;j++)
 	{
-		glTexCoord2f(sin(j*PI/25+spinoffs)*0.5+0.5     , cos(j*PI/25+spinoffs)*0.5+0.5);
-		//glVertex3f(x  +0.01*sin(j*3.14/5)     , y + 0.01*cos(j*3.14/5), 0);
-		//glVertex3f(x  +0.05*sin(j*3.14/5)*pressure     , y + 0.05*cos(j*3.14/5)*pressure, 0);
-		if(brushes[selectedbrush].scalepressure)
-			glVertex3f(x  +0.1*sin(j*PI/25)*pressure/zoom*brushes[selectedbrush].size     , y + 0.1*cos(j*PI/25)*pressure/zoom*brushes[selectedbrush].size, 0);
-		else
-			glVertex3f(x  +0.1*sin(j*PI/25)/zoom*brushes[selectedbrush].size     , y + 0.1*cos(j*PI/25)/zoom*brushes[selectedbrush].size, 0);
+		glTexCoord2f(sin(j*PI/25+spinoffs + rotation)*0.5+0.5     , cos(j*PI/25+spinoffs + rotation)*0.5+0.5);
+		glVertex3f(x  +sin(j*PI/25)*brushsize     , y + cos(j*PI/25)*brushsize, 0);
 	}
 
 	glEnd();
-	glEnable(GL_TEXTURE_2D);
+}
+void c_paintline(float startx, float starty, float startpressure, float endx, float endy, float endpressure)
+{
+	float samplex = startx, sampley = starty;
+	wtol(&startx, &starty);
+	wtol(&endx, &endy);
+	if(brushes[selectedbrush].blur && abs(startx)<1 && abs(starty)<1)
+		c_droppersample(samplex,sampley);
+	target(layers[currentlayer].texid, LAYERSIZE, LAYERSIZE);
+
+	
+	int numsamples = ceil(sqrt(pow(startx-endx, 2) + pow(starty-endy, 2))*brushes[selectedbrush].density);
+	int i;
+	for(i=0;i<numsamples;i++)
+		c_paint((startx*i + endx*(numsamples-i))/numsamples,(starty*i + endy*(numsamples-i))/numsamples,(startpressure*i + endpressure*(numsamples-i))/numsamples);
 	untarget();
 }
 void c_viscursor(float x, float y )
 {
 
+	//glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+	//glBlendFunc(GL_ONE, GL_SRC_ALPHA);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 //	wtos(&x, &y);
 	x = (x*2)-1;
 	y = (y*-2)+1;
@@ -474,14 +483,14 @@ void c_viscursor(float x, float y )
 	glEnable(GL_LINE_STIPPLE);
 	if(brushes[selectedbrush].erase)
 	{
-		glColor4f(1, 1,0.5, 1);
+		glColor4f(1, 1,0.5, 0);
 		glLineStipple(1, 0xCCCC);
 	}
 	else if(brushes[selectedbrush].blur)
 	{
 
 		glColor4f(0.5, 0.5,0.5, 1);
-		glLineStipple(1, 0xFF00);
+		glLineStipple(1, 0x00F0);
 	}
 	else
 	{
@@ -503,7 +512,10 @@ void c_viscursor(float x, float y )
 	{
 		//glTexCoord2f(sin(j*PI/10)*0.5+0.5     , cos(j*PI/10)*0.5+0.5);
 		glTexCoord2f(sin(j*PI/10)*0.5+0.5     , cos(j*PI/10)*0.5+0.5);
-		glVertex3f(x  +0.1*sin(j*PI/10)*windowa*brushes[selectedbrush].size, y + 0.1*cos(j*PI/10)*brushes[selectedbrush].size, 0);
+		if(brushes[selectedbrush].constantsize)
+			glVertex3f(x  +0.1*sin(j*PI/10)*windowa*brushes[selectedbrush].size*zoom, y + 0.1*cos(j*PI/10)*brushes[selectedbrush].size*zoom, 0);
+		else
+			glVertex3f(x  +0.1*sin(j*PI/10)*windowa*brushes[selectedbrush].size, y + 0.1*cos(j*PI/10)*brushes[selectedbrush].size, 0);
 /*		if(brushes[selectedbrush].texid != 0)//draw an inner circle if we're visualizing a texture, so point sampling works
 		{
 			glTexCoord2f(sin(j*PI/10)*0.05+0.5     , cos(j*PI/10)*0.05+0.5);
@@ -511,6 +523,7 @@ void c_viscursor(float x, float y )
 		}*/
 	}
 	glEnd();
+	//glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_TEXTURE_2D);
 }
 
