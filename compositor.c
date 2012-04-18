@@ -113,22 +113,13 @@ static void drawwheel()
 }
 static void wtol(float *x, float *y)
 {
-		*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa;
-		*y = ((*y-0.5)*-2)/zoom-pany;
-	if(x != NULL)
-	{	//*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa/zoom;
-		float tx = -*y, ty=*x;//don't fucking touch this shit
-		float ay = sin(rotation)*ty - cos(rotation)*tx;
-		float ax = sin(rotation)*tx + cos(rotation)*ty;
-		*x = ax;
-	}
-	if(y!= NULL)
-	{
-		float tx = -*y, ty=*x;//don't fucking touch this shit
-		float ay = sin(rotation)*ty - cos(rotation)*tx;
-		float ax = sin(rotation)*tx + cos(rotation)*ty;
-		*y = ay;
-	}
+	*x = ((*x-0.5)*2/windowa)/zoom-panx/windowa;
+	*y = ((*y-0.5)*-2)/zoom-pany;
+	float tx = -*y, ty=*x;//don't fucking touch this shit
+	float ay = sin(rotation)*ty - cos(rotation)*tx;
+	float ax = sin(rotation)*tx + cos(rotation)*ty;
+	*x = ax;
+	*y = ay;
 }
 static GLuint loadtex(char *filename)
 {
