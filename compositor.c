@@ -404,7 +404,7 @@ void c_droppersample(float x, float y)
 	brushes[selectedbrush].b = retrieved[2];
 }
 
-void c_paint(float x, float y, float pressure)
+static void paint(float x, float y, float pressure)//TODO:replace the public version of this, move it with the other private ones
 {
 	glBindTexture(GL_TEXTURE_2D,brushes[selectedbrush].texid);
 	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -416,7 +416,7 @@ void c_paint(float x, float y, float pressure)
 	
 	glBegin(GL_TRIANGLE_FAN);
 	glTexCoord2f(0.5,0.5);
-	float a = pressure*brushes[selectedbrush].a;
+	float a = pressure*brushes[selectedbrush].a/**((((float)rand())/RAND_MAX - 0.5)*0.1 + 1)*/;
 	if(!brushes[selectedbrush].colorshifta)
 		clamp(&a,0,1);
 //	if(brushes[selectedbrush].erase)
@@ -458,7 +458,7 @@ void c_paintline(float startx, float starty, float startpressure, float endx, fl
 	int numsamples = ceil(sqrt(pow(startx-endx, 2) + pow(starty-endy, 2))*brushes[selectedbrush].density);
 	int i;
 	for(i=0;i<numsamples;i++)
-		c_paint((startx*i + endx*(numsamples-i))/numsamples,(starty*i + endy*(numsamples-i))/numsamples,(startpressure*i + endpressure*(numsamples-i))/numsamples);
+		paint((startx*i + endx*(numsamples-i))/numsamples,(starty*i + endy*(numsamples-i))/numsamples,(startpressure*i + endpressure*(numsamples-i))/numsamples);
 	untarget();
 }
 void c_viscursor(float x, float y )
