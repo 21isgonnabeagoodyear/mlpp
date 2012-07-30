@@ -10,7 +10,7 @@
 #define NUMLAYERS 2
 #define NUMBRUSHES 11//why 11 and not 10?
 #define PI 3.1415926
-#include "atexture.xbm"
+//#include "atexture.xbm"
 
 typedef struct
 {

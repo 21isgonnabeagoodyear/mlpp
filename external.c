@@ -81,6 +81,8 @@ static gboolean  mousemove(GtkWidget *widget, GdkEventMotion *event)
 
 if(event->device->source == GDK_SOURCE_MOUSE&& event->state & GDK_BUTTON1_MASK)
 	pressure = 0.5;
+else if(event->device->source == GDK_SOURCE_MOUSE)
+	pressure = 0;
 //printf("mvd\n");
 	if(event->state & GDK_BUTTON2_MASK)
 	{
