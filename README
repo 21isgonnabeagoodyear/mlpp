@@ -8,7 +8,7 @@ up to date versions (compiled on debian testing)
 -gtk
 -gtkglext
 -opengl with fbo support (lots of vram preferrably)
--graphics tablet (mouse won't work at all)
+-graphics tablet (recommended)
 
 USAGE
 run the mlpp file
